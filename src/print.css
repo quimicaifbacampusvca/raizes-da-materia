@@ -1,0 +1,29 @@
+
+.deck-print-sheet{margin:18px auto;max-width:900px;min-height:450px;padding:24px;background:#efe9df;color:#3e3327}
+.deck-print-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-width:680px;margin:auto}
+.deck-print-card{aspect-ratio:5/7;max-width:100%;overflow:hidden;box-shadow:0 2px 8px #0003}
+.deck-print-caption{font-size:13px;text-align:center;margin:12px 0;color:#5c4b37}
+@page{size:A4 portrait;margin:0}
+@media print{
+ html,body,#root{width:210mm;margin:0;padding:0;background:white!important;overflow:visible!important}
+ .no-print{display:none!important}
+ .deck-print-sheet{
+   width:210mm;height:297mm;box-sizing:border-box;margin:0;padding:0;
+   page-break-after:always;break-after:page;
+   display:flex;align-items:center;justify-content:center;
+   overflow:hidden;background:white!important
+ }
+ .deck-print-grid{
+   width:152mm;max-width:none;height:212mm;margin:0;
+   display:grid;grid-template-columns:repeat(2,75mm);
+   grid-template-rows:repeat(2,105mm);gap:2mm;
+ }
+ .deck-print-card{
+   width:75mm;height:105mm;min-width:75mm;max-width:75mm;
+   aspect-ratio:auto;box-shadow:none;overflow:hidden;
+ }
+ .deck-print-card svg{display:block;width:75mm;height:105mm;}
+ .deck-print-caption{display:none}
+ .deck-print-sheet:last-child{break-after:auto;page-break-after:auto}
+ *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+}
