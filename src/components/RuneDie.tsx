@@ -30,8 +30,13 @@ export default function RuneDie({value,pending=false,canRoll=false,disabled=fals
   },[value])
   return <div className="rounded-2xl border border-[#85663a]/60 bg-[#13100c]/90 p-3 text-center text-[#ecd5a7]">
     <p className="text-xs uppercase tracking-[.18em] text-[#ceae72]">Dado da Árvore</p>
-    <div className={'runic-die-scene mx-auto my-3 flex h-[104px] items-center justify-center '+(pending?'runic-die-pending':'')}>
-      <div className="runic-die-cube" style={{transform:'rotateX('+angle.x+'deg) rotateY('+angle.y+'deg)'}}>
+    <button type="button"
+      aria-label={canRoll?'Lançar dado':'Dado da Árvore: aguarde sua vez'}
+      title={canRoll?'Toque no dado para lançar':'Dado da Árvore'}
+      onClick={onRoll}
+      disabled={!canRoll||disabled||pending}
+      className={'runic-die-scene mx-auto my-3 flex h-[116px] w-[134px] items-center justify-center rounded-2xl border border-[#a78351]/35 bg-[#211b13]/65 transition hover:border-[#e4c085] focus-visible:outline-2 focus-visible:outline-[#f6d89c] disabled:cursor-default disabled:opacity-85 '+(pending?'runic-die-pending':'')}>
+      <div aria-hidden="true" className="runic-die-cube" style={{transform:'rotateX('+angle.x+'deg) rotateY('+angle.y+'deg)'}}>
         {faceTurns.map(face=><div key={face.value} className="runic-die-face" style={{transform:face.css}}>
           <div className="grid h-full w-full grid-cols-3 grid-rows-3 place-items-center p-[10px]">
             {Array.from({length:9},(_,i)=><span key={i}
@@ -39,13 +44,12 @@ export default function RuneDie({value,pending=false,canRoll=false,disabled=fals
           </div>
         </div>)}
       </div>
-    </div>
+    </button>
     <p className="mb-3 text-sm" role="status" aria-live="polite">
       Resultado: <strong className="tabular-nums text-lg text-[#ffe0a1]">{value??(pending?'…':'—')}</strong>
     </p>
-    {canRoll&&<button type="button" onClick={onRoll} disabled={disabled||pending}
-      className="min-h-12 w-full rounded-xl bg-gradient-to-b from-[#f0d39d] to-[#ba8d47] px-3 font-bold text-[#291d11] shadow-[0_3px_0_#634721] disabled:cursor-not-allowed disabled:opacity-45">
-      {pending?'Lançando…':'Lançar dado'}
-    </button>}
+    <p className="text-xs text-[#ddc89d]" aria-live="polite">
+      {pending?'O dado está girando…':canRoll?'Toque no próprio dado para lançar e voltar ao mapa.':'O resultado será compartilhado com toda a sala.'}
+    </p>
   </div>
 }
