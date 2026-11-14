@@ -91,6 +91,8 @@ export default function OnlineRoom(){
   const [headerHeight,setHeaderHeight]=useState(128)
   const [busy,setBusy]=useState(false)
   const [pendingRoll,setPendingRoll]=useState(false)
+  const [diceOverlay,setDiceOverlay]=useState<{key:string;value:number|null}|null>(null)
+  const lastRollShown=useRef<string|null>(null)
   const [notice,setNotice]=useState('')
   const [authError,setAuthError]=useState<string|null>(null)
   const supabase=useMemo(getSupabaseClient,[])
@@ -174,6 +176,28 @@ export default function OnlineRoom(){
   const targets=myTurn&&room?.phase==='moving'&&self?neighbors(self.node_id):[]
   const activeSeat=room?.current_seat??null
 
+  // A alteração de fase vem do Supabase e é recebida em todos os navegadores,
+  // inclusive o do mestre. O resultado não é sorteado pelo cliente.
+  useEffect(()=>{
+    if(!room||room.phase!=='moving'||room.die_roll==null)return
+    const key=room.id+':'+room.turn_index+':'+room.die_roll
+    if(lastRollShown.current===key)return
+    lastRollShown.current=key
+    setDiceOverlay({key,value:room.die_roll})
+    setBoard('arvore')
+    setPanel(null)
+  },[room?.id,room?.phase,room?.turn_index,room?.die_roll])
+
+  useEffect(()=>{
+    if(!diceOverlay)return
+    if(diceOverlay.value==null)return
+    const key=diceOverlay.key
+    const timer=window.setTimeout(()=>{
+      setDiceOverlay(current=>current?.key===key?null:current)
+    },2600)
+    return()=>window.clearTimeout(timer)
+  },[diceOverlay?.key,diceOverlay?.value])
+
   // Todos voltam ao mapa quando o dado é lançado. Quem clicou
   // permanece no painel até a animação terminar.
   useEffect(()=>{
@@ -224,17 +248,18 @@ export default function OnlineRoom(){
     if(!supabase||!roomId||busy||pendingRoll||!myTurn||room?.phase!=='ready')return
     setBusy(true)
     setPendingRoll(true)
+    setDiceOverlay({key:'pendente:'+roomId+':'+room.turn_index,value:null})
     try{
       // O servidor é quem sorteia: a animação não escolhe nem modifica o resultado.
       const {data,error}=await supabase.rpc('game_roll_die',{p_room:roomId})
       if(error)throw new Error(error.message)
       await refresh(roomId)
       setNotice('Dado: '+data+'. Seu caminho está iluminado na árvore.')
-      // Mantém o dado visível durante o giro antes de revelar os galhos alcançáveis.
-      await new Promise<void>(resolve=>window.setTimeout(resolve,1050))
+      // O modal mostra o resultado recebido. A árvore permanece ao fundo.
       setBoard('arvore')
       setPanel(null)
     }catch(e){
+      setDiceOverlay(null)
       setNotice('Não foi possível lançar o dado: '+errorText(e))
     }finally{
       setPendingRoll(false)
@@ -262,7 +287,7 @@ export default function OnlineRoom(){
       }
       sessionStorage.removeItem('raizes-room-id')
       setRoomId(null);setRoom(null);setPlayers([]);setClaims([])
-      setPanel(null);setExitConfirm(false);setBoard('arvore')
+      setPanel(null);setExitConfirm(false);setBoard('arvore');setDiceOverlay(null)
       setNotice(host?'A sala foi encerrada para todos.':'Você saiu da sala. É possível entrar em outra partida.')
     }catch(e){setNotice('Não foi possível sair: '+errorText(e));setExitConfirm(false)}
     finally{setBusy(false)}
@@ -452,6 +477,26 @@ export default function OnlineRoom(){
       </>}
     </div>}
 
+    {room&&room.phase==='ready'&&myTurn&&
+      <button type="button" onClick={()=>void rollDie()} disabled={busy||pendingRoll}
+        className="fixed bottom-[calc(6.4rem+env(safe-area-inset-bottom))] right-3 z-30 min-h-12 rounded-2xl border-2 border-[#eed2a0] bg-[#c9a16a] px-5 text-sm font-bold text-[#261909] shadow-[0_8px_30px_#0008] hover:bg-[#f0d7a2] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fff0bd] disabled:opacity-50 sm:right-6">
+        ⚄ Lançar dado
+      </button>}
+    {diceOverlay&&room&&<div className="fixed inset-0 z-[68] flex items-center justify-center bg-[#040905]/90 p-3 backdrop-blur-md"
+      role="presentation" data-dice-modal="true">
+      <section role="dialog" aria-modal="true" aria-label="Lançamento do dado compartilhado"
+        className="w-full max-w-sm rounded-3xl border-2 border-[#c49d65] bg-[#17291e] p-5 text-center shadow-[0_20px_85px_#000]">
+        <p className="text-xs uppercase tracking-[.2em] text-[#dfc18c]">Lançamento compartilhado</p>
+        <h2 className="mt-2 font-serif text-2xl font-bold text-[#ffe0aa]">
+          {diceOverlay.value==null?'O dado está girando…':'O destino escolheu: '+diceOverlay.value}
+        </h2>
+        <RuneDie value={diceOverlay.value} pending={diceOverlay.value==null}/>
+        <p role="status" className="mt-3 text-sm text-[#ccddc8]">
+          {diceOverlay.value==null?'Aguardando resultado do servidor…':
+            'Todos veem o mesmo resultado. Em seguida, retornam à Yggdrasil.'}
+        </p>
+      </section>
+    </div>}
     {room&&room.phase==='challenge'&&supabase&&!cardHidden&&<ChallengeCard
       client={supabase} roomId={room.id} turnIndex={room.turn_index}
       userId={userId} host={host} isCurrentPlayer={myTurn}
