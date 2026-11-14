@@ -77,7 +77,7 @@ function NodeGlyph({ type }: { type: HouseType }) {
 
 function TreeDrawing({ prefix, pawns, focusedNodeId, reachableIds, onMove, busy, svgRef }: Required<Pick<Props, 'pawns' | 'reachableIds' | 'busy'>> & Pick<Props, 'focusedNodeId' | 'onMove'> & { prefix: string; svgRef: RefObject<SVGSVGElement | null> }) {
   return <svg ref={svgRef} viewBox="0 0 900 1210" role="group" aria-label="Yggdrasil, árvore da descoberta com 48 casas navegáveis"
-    preserveAspectRatio="xMidYMid meet" className="block h-full w-full select-none" xmlns="http://www.w3.org/2000/svg">
+    className="block h-auto w-full select-none" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <radialGradient id={prefix + '-vellum'} cx="48%" cy="41%" r="64%">
         <stop offset="0%" stopColor="#dec49a" /><stop offset="50%" stopColor="#b89769" />
@@ -250,49 +250,20 @@ function TreeDrawing({ prefix, pawns, focusedNodeId, reachableIds, onMove, busy,
 
 export default function YggdrasilBoard({ pawns, focusedNodeId=null, reachableIds=[], onMove, busy=false, className='' }: Props) {
   const [expanded,setExpanded] = useState(false)
-  const [stageHeight,setStageHeight] = useState(500)
   const svgRef = useRef<SVGSVGElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const prefix=useId().replace(/:/g,'')
 
-  // A altura é a região realmente disponível entre o painel superior e
-  // a doca fixa, evitando cortes da copa/raízes em celular e desktop.
   useEffect(() => {
     const viewport=scrollRef.current
-    if(!viewport)return
-    const calculate=()=>{
-      const screenHeight=window.visualViewport?.height ?? window.innerHeight
-      const top=viewport.getBoundingClientRect().top
-      const space=screenHeight-top-100
-      setStageHeight(Math.max(150,Math.min(920,Math.floor(space))))
-    }
-    calculate()
-    const observer=new ResizeObserver(calculate)
-    if(viewport.parentElement)observer.observe(viewport.parentElement)
-    window.addEventListener('resize',calculate)
-    window.visualViewport?.addEventListener('resize',calculate)
-    return ()=>{
-      observer.disconnect()
-      window.removeEventListener('resize',calculate)
-      window.visualViewport?.removeEventListener('resize',calculate)
-    }
-  },[])
-
-  useEffect(() => {
-    const viewport=scrollRef.current
-    if(!viewport)return
-    if(!expanded){
-      viewport.scrollTo({left:0,top:0,behavior:'instant'})
-      return
-    }
-    if(focusedNodeId==null)return
-    const node=position(focusedNodeId)
-    const svgWidth=svgRef.current?.getBoundingClientRect().width??900
+    if(!viewport || focusedNodeId == null) return
+    const n=position(focusedNodeId)
+    const svgWidth=svgRef.current?.getBoundingClientRect().width ?? 680
     const ratio=svgWidth/900
     viewport.scrollTo({
-      left:Math.max(0,node.x*ratio-viewport.clientWidth/2),
-      top:Math.max(0,node.y*ratio-viewport.clientHeight/2),
-      behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',
+      left: Math.max(0,n.x*ratio-viewport.clientWidth/2),
+      top: Math.max(0,n.y*ratio-viewport.clientHeight/2),
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',
     })
   },[focusedNodeId,expanded])
 
@@ -321,13 +292,13 @@ export default function YggdrasilBoard({ pawns, focusedNodeId=null, reachableIds
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#8a6a43]/35 px-3 py-3 sm:px-5">
       <div>
         <p className="font-serif text-base tracking-[.14em] text-[#e7ca91] sm:text-lg">A Árvore dos Elementos</p>
-        <p className="text-xs text-[#bcac8e]">{expanded?'Exploração ampliada · arraste para navegar':'Mapa inteiro · 48 casas visíveis'}</p>
+        <p className="text-xs text-[#bcac8e]">Gravura vetorial interativa · 48 casas</p>
       </div>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={()=>setExpanded(old=>!old)}
           aria-pressed={expanded}
           className="min-h-11 rounded-lg border border-[#c59d5c]/60 px-3 text-sm font-semibold text-[#f2d49d] hover:bg-[#3d3020] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fae4b4]">
-          {expanded?'Ver mapa inteiro':'Ampliar para jogar'}
+          {expanded?'Ajustar mapa':'Ampliar mapa'}
         </button>
         <button type="button" onClick={exportSvg}
           className="min-h-11 rounded-lg border border-[#c59d5c]/60 px-3 text-sm font-semibold text-[#f2d49d] hover:bg-[#3d3020] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fae4b4]">
@@ -335,17 +306,9 @@ export default function YggdrasilBoard({ pawns, focusedNodeId=null, reachableIds
         </button>
       </div>
     </div>
-    <div ref={scrollRef}
-      className={expanded
-        ?'w-full overflow-auto overscroll-contain'
-        :'w-full overflow-hidden'}
-      style={{height:stageHeight}}
-      role="region" tabIndex={0}
-      aria-label="Área navegável da árvore com rolagem vertical e horizontal"
-      data-map-mode={expanded?'zoom':'fit'}>
-      <div className={expanded
-        ?'mx-auto aspect-[900/1210] min-w-[900px] w-full max-w-[1100px]'
-        :'h-full w-full'}>
+    <div ref={scrollRef} className="max-h-[72dvh] min-h-[320px] overflow-auto overscroll-contain sm:max-h-[780px]"
+      role="region" tabIndex={0} aria-label="Área navegável da árvore com rolagem vertical e horizontal">
+      <div className={'mx-auto '+(expanded?'min-w-[900px] max-w-[1050px]':'min-w-[680px] max-w-[900px] sm:min-w-0')}>
         <TreeDrawing prefix={prefix} svgRef={svgRef} pawns={pawns} focusedNodeId={focusedNodeId}
           reachableIds={reachableIds} onMove={onMove} busy={busy}/>
       </div>
@@ -357,6 +320,6 @@ export default function YggdrasilBoard({ pawns, focusedNodeId=null, reachableIds
         <span>{houseLabel[type]}</span>
       </div>)}
     </div>
-    <p className="px-3 pb-3 text-xs text-[#b9a98a] sm:px-5">A árvore aparece inteira por padrão. Para tocar nas casas com mais precisão, use “Ampliar para jogar”; nesse modo, o mapa acompanha o peão e permite rolagem. Os nós entalhados não consomem passos.</p>
+    <p className="px-3 pb-3 text-xs text-[#b9a98a] sm:px-5">Os galhos conduzem o movimento; pequenos nós entalhados indicam a passagem entre casas, sem consumir passos extras. No celular, deslize pelo tronco e pelas ramificações; a câmera acompanha o peão.</p>
   </div>
 }

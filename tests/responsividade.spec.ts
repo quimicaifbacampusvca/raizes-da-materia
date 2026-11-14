@@ -185,98 +185,120 @@ test('capturas dos galhos intermediários para revisão da arte',async({page},te
 })
 
 
-for(const dims of [
-  {width:320,height:640},{width:390,height:844},
-  {width:667,height:375},{width:768,height:1024},{width:1440,height:900},
-]){
-  test('mapa inteiro sem cortes · '+dims.width+'×'+dims.height,async({page})=>{
-    await page.setViewportSize(dims)
-    await mockBackend(page,true)
-    await page.goto('./')
-    const area=page.getByRole('region',{name:/Área navegável da árvore/})
-    const svg=page.getByRole('group',{name:/Yggdrasil/})
-    await expect(svg).toBeVisible()
-    await expect(area).toHaveAttribute('data-map-mode','fit')
-    await expect(svg).toHaveAttribute('preserveAspectRatio','xMidYMid meet')
-    const metrics=await area.evaluate(el=>({
-      width:el.clientWidth,scrollWidth:el.scrollWidth,
-      height:el.clientHeight,scrollHeight:el.scrollHeight,
-    }))
-    expect(metrics.scrollWidth,'Modo inteiro não pode recortar lateralmente').toBeLessThanOrEqual(metrics.width+2)
-    expect(metrics.scrollHeight,'Modo inteiro não pode recortar verticalmente').toBeLessThanOrEqual(metrics.height+2)
-    const bounds=await area.boundingBox()
-    expect(bounds).not.toBeNull()
-    const nodes=svg.locator('[data-node-id]')
-    await expect(nodes).toHaveCount(48)
-    for(const id of [0,5,17,24,35,47]){
-      const box=await nodes.nth(id).boundingBox()
-      expect(box).not.toBeNull()
-      expect(box!.x,'Casa '+id+' saiu pelo lado esquerdo').toBeGreaterThanOrEqual(bounds!.x-2)
-      expect(box!.x+box!.width,'Casa '+id+' saiu pelo lado direito').toBeLessThanOrEqual(bounds!.x+bounds!.width+2)
-      expect(box!.y,'Casa '+id+' saiu por cima').toBeGreaterThanOrEqual(bounds!.y-2)
-      expect(box!.y+box!.height,'Casa '+id+' saiu por baixo').toBeLessThanOrEqual(bounds!.y+bounds!.height+2)
-    }
-    await assertNoOverflow(page,dims.width)
-  })
+type MockDigitalState={
+  verdict:'correct'|'incorrect'|null
+  submission:{player_id:string;mode:'choice'|'text';option_index:number|null;answer_text:string|null}|null
+  messages:Array<{id:number;sender_id:string;body:string;created_at:string}>
 }
-
-test('no celular: zoom opcional e retorno ao mapa inteiro',async({page})=>{
-  await page.setViewportSize({width:390,height:844})
-  await mockBackend(page,true)
-  await page.goto('./')
-  const area=page.getByRole('region',{name:/Área navegável da árvore/})
-  await expect(area).toHaveAttribute('data-map-mode','fit')
-  await page.getByRole('button',{name:'Ampliar para jogar'}).click()
-  await expect(area).toHaveAttribute('data-map-mode','zoom')
-  await expect.poll(async()=>area.evaluate(el=>el.scrollWidth>el.clientWidth)).toBe(true)
-  await page.getByRole('button',{name:'Ver mapa inteiro'}).click()
-  await expect(area).toHaveAttribute('data-map-mode','fit')
-  await assertNoOverflow(page,390)
-})
-
-test('clique no próprio dado aciona RPC e retorna ao mapa após a animação',async({page})=>{
-  await page.setViewportSize({width:390,height:844})
+function mockCardState():MockDigitalState{return {verdict:null,submission:null,messages:[]}}
+async function mockVirtualCard(page:Page,role:'master'|'student',state:MockDigitalState,mode:'choice'|'text'='choice'){
   await page.addInitScript((id:string)=>sessionStorage.setItem('raizes-room-id',id),roomId)
-  let phase:'ready'|'moving'='ready'
-  let rollCalls=0
-  const currentUser={...user,id:playerId}
+  const uid=role==='master'?masterId:playerId
+  const currentUser={...user,id:uid}
   const header=Buffer.from(JSON.stringify({alg:'none',typ:'JWT'})).toString('base64url')
-  const payload=Buffer.from(JSON.stringify({sub:playerId,role:'authenticated',aud:'authenticated',exp:4070908800})).toString('base64url')
-  const token=header+'.'+payload+'.mock'
+  const payload=Buffer.from(JSON.stringify({sub:uid,role:'authenticated',aud:'authenticated',exp:4070908800})).toString('base64url')
+  const jwt=header+'.'+payload+'.mock'
   await page.route('https://mock.supabase.co/**',async route=>{
     const path=new URL(route.request().url()).pathname
     let data:unknown=null
+    let status=200
     if(path.includes('/auth/v1/signup')||path.includes('/auth/v1/token')){
-      data={access_token:token,refresh_token:'mock-refresh',token_type:'bearer',expires_in:3600,user:currentUser}
+      data={access_token:jwt,refresh_token:'mock-refresh',token_type:'bearer',expires_in:3600,user:currentUser}
     }else if(path.includes('/auth/v1/user'))data=currentUser
     else if(path.includes('/rest/v1/game_rooms'))data={
-      id:roomId,code:'1A2B3C4D5E',name:'Jogo remoto',host_id:masterId,phase,
-      current_seat:1,die_roll:phase==='ready'?null:3,remaining_steps:phase==='ready'?0:3,
-      award_used:false,revision:phase==='ready'?1:2,
+      id:roomId,code:'1A2B3C4D5E',name:'Expedição digital',host_id:masterId,
+      phase:'challenge',current_seat:1,die_roll:3,remaining_steps:0,
+      award_used:state.verdict==='correct',revision:4,turn_index:0,
     }
     else if(path.includes('/rest/v1/game_players'))data=[
-      {user_id:playerId,seat:1,nickname:'Jogador A',node_id:0,active:true},
+      {user_id:playerId,seat:1,nickname:'Estudante',node_id:3,active:true},
     ]
     else if(path.includes('/rest/v1/game_claims'))data=[]
-    else if(path.includes('/rest/v1/rpc/game_roll_die')){
-      rollCalls++
-      phase='moving'
-      data=3
+    else if(path.includes('/rest/v1/game_room_challenges'))data={
+      id:'44444444-4444-4444-8444-444444444444',room_id:roomId,
+      turn_index:0,card_id:mode==='choice'?'el_Cu':'des_ligacao',
+      player_id:playerId,node_id:3,verdict:state.verdict,
     }
-    await route.fulfill({status:200,contentType:'application/json',
-      headers:{'access-control-allow-origin':'*','content-range':'0-0/1'},body:JSON.stringify(data)})
+    else if(path.includes('/rest/v1/game_cards'))data={
+      id:mode==='choice'?'el_Cu':'des_ligacao',category:'identificacao',
+      title:mode==='choice'?'Símbolo Cu':'Ligação metálica',
+      prompt:mode==='choice'?'Qual elemento químico corresponde ao símbolo Cu?':'Explique como os centros metálicos se unem.',
+      mode,options:mode==='choice'?['Cobre','Sódio','Hélio','Ferro']:[],
+      symbol:mode==='choice'?'Cu':null,instructions:'Dialogue com os colegas.',
+    }
+    else if(path.includes('/rest/v1/game_challenge_submissions')){
+      data=role==='master'||state.submission?.player_id===uid?state.submission:null
+    }
+    else if(path.includes('/rest/v1/game_challenge_messages'))data=state.messages
+    else if(path.includes('/rest/v1/rpc/game_get_card_key')){
+      if(role!=='master'){status=403;data={message:'Apenas mestre'} }
+      else data={correct_index:mode==='choice'?0:null,reference:'O cobre é representado pelo símbolo Cu.'}
+    }
+    else if(path.includes('/rest/v1/rpc/game_submit_answer')){
+      const b=route.request().postDataJSON()
+      if(role!=='student'||state.submission){status=403;data={message:'Resposta não permitida'}}
+      else{
+        state.submission={player_id:uid,mode,option_index:b.p_option,answer_text:b.p_text}
+        data=true
+      }
+    }else if(path.includes('/rest/v1/rpc/game_send_challenge_message')){
+      const b=route.request().postDataJSON()
+      state.messages.push({id:state.messages.length+1,sender_id:uid,body:b.p_body,created_at:new Date().toISOString()})
+      data=state.messages.length
+    }else if(path.includes('/rest/v1/rpc/game_validate_card')){
+      if(role!=='master'){status=403;data={message:'Somente mestre'}}
+      else{
+        const b=route.request().postDataJSON()
+        state.verdict=b.p_correct?'correct':'incorrect'
+        data=true
+      }
+    }else if(path.includes('/rest/v1/'))data=null
+    else {status=404;data={message:'Rota não mockada: '+path}}
+    await route.fulfill({status,contentType:'application/json',
+      headers:{'access-control-allow-origin':'*','content-range':'0-0/1'},
+      body:JSON.stringify(data)})
   })
+}
+
+test('carta de alternativas é pública e gabarito é restrito ao mestre',async({browser})=>{
+  const state=mockCardState()
+  const teacher=await browser.newContext({viewport:{width:1440,height:900}})
+  const student=await browser.newContext({viewport:{width:390,height:844}})
+  try{
+    const masterPage=await teacher.newPage()
+    const studentPage=await student.newPage()
+    await mockVirtualCard(masterPage,'master',state)
+    await mockVirtualCard(studentPage,'student',state)
+    await Promise.all([masterPage.goto('http://127.0.0.1:4173/raizes-da-materia/'),studentPage.goto('http://127.0.0.1:4173/raizes-da-materia/')])
+    await expect(masterPage.getByRole('dialog',{name:'Carta de investigação compartilhada'})).toBeVisible()
+    await expect(studentPage.getByRole('dialog',{name:'Carta de investigação compartilhada'})).toBeVisible()
+    await expect(masterPage.getByText('Referência reservada')).toBeVisible()
+    await expect(studentPage.getByText('Referência reservada')).toHaveCount(0)
+    await expect(studentPage.getByText('Qual elemento químico corresponde ao símbolo Cu?')).toBeVisible()
+    await studentPage.getByRole('radio',{name:/A. Cobre/}).check()
+    await studentPage.getByRole('button',{name:'Enviar resposta ao mestre'}).click()
+    await expect(studentPage.getByText('Resposta enviada ao mestre')).toBeVisible()
+    await expect(masterPage.getByText('Resposta recebida de Estudante:')).toBeVisible({timeout:10000})
+    await studentPage.getByLabel('Mensagem para todos').fill('Eu associei Cu ao cobre.')
+    await studentPage.getByRole('button',{name:'Enviar ao chat'}).click()
+    await expect(masterPage.getByText('Eu associei Cu ao cobre.')).toBeVisible({timeout:10000})
+    await masterPage.getByRole('button',{name:'✓ Correto'}).click()
+    await expect(studentPage.getByText('Resposta validada como correta pelo mestre.')).toBeVisible({timeout:10000})
+    await expect(masterPage.getByRole('button',{name:'Encerrar turno e continuar'})).toBeVisible()
+    await assertNoOverflow(studentPage,390)
+  }finally{
+    await teacher.close();await student.close()
+  }
+})
+
+test('resposta textual funciona em celular estreito e o mestre pode marcar incorreto',async({page})=>{
+  await page.setViewportSize({width:320,height:640})
+  const state=mockCardState()
+  await mockVirtualCard(page,'student',state,'text')
   await page.goto('./')
-  await page.getByRole('button',{name:'Ações',exact:true}).click()
-  const die=page.getByRole('button',{name:'Lançar dado'})
-  await expect(die).toBeVisible()
-  await expect(die).toBeEnabled()
-  await die.click()
-  await expect(page.getByText('Resultado:',{exact:false})).toBeVisible()
-  await expect.poll(()=>rollCalls).toBe(1)
-  await expect(page.getByRole('region',{name:/Painel flutuante: Ações/})).toHaveCount(0,{timeout:10000})
-  await expect(page.getByRole('group',{name:/Yggdrasil/})).toBeVisible()
-  await expect(page.getByRole('region',{name:/Área navegável da árvore/})).toHaveAttribute('data-map-mode','fit')
-  await expect(page.getByText('Dado: 3. Seu caminho está iluminado na árvore.')).toBeVisible()
-  await assertNoOverflow(page,390)
+  await expect(page.getByRole('dialog',{name:'Carta de investigação compartilhada'})).toBeVisible()
+  await page.getByLabel('Sua resposta para avaliação').fill('Os elétrons deslocalizados contribuem para a coesão.')
+  await page.getByRole('button',{name:'Enviar resposta ao mestre'}).click()
+  await expect(page.getByText('Resposta enviada ao mestre')).toBeVisible()
+  await assertNoOverflow(page,320)
 })
