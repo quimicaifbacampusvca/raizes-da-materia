@@ -90,7 +90,7 @@ export default function OnlineRoom(){
   const [headerHeight,setHeaderHeight]=useState(128)
   const [busy,setBusy]=useState(false)
   const [pendingRoll,setPendingRoll]=useState(false)
-  const [notice,setNotice]=useState('')
+  const [notice,setNotice]=useState('Crie uma sala como mestre ou entre com um código de convite.')
   const [authError,setAuthError]=useState<string|null>(null)
   const supabase=useMemo(getSupabaseClient,[])
   const configured=isSupabaseConfigured()
@@ -176,15 +176,6 @@ export default function OnlineRoom(){
   const remainingElements=playableElements.filter(e=>!claims.some(c=>c.symbol===e.symbol))
   const activeSeat=room?.current_seat??null
 
-  // Todos voltam ao mapa quando o dado é lançado. Quem clicou
-  // permanece no painel até a animação terminar.
-  useEffect(()=>{
-    if(room?.phase==='moving'&&!pendingRoll){
-      setBoard('arvore')
-      setPanel(null)
-    }
-  },[room?.phase,pendingRoll])
-
   async function execute(action:()=>PromiseLike<{data:unknown;error:{message:string}|null}>,message:string|((data:unknown)=>string)){
     if(!supabase||busy)return
     setBusy(true)
@@ -222,32 +213,15 @@ export default function OnlineRoom(){
       return isHost?'Sala recuperada: você é o mestre. Para testar como jogador, use outra sessão.':'Você entrou na sala!'
     })
   }
-  async function rollDie(){
-    if(!supabase||!roomId||busy||pendingRoll||!myTurn||room?.phase!=='ready')return
-    setBusy(true)
-    setPendingRoll(true)
-    try{
-      // O servidor é quem sorteia: a animação não escolhe nem modifica o resultado.
-      const {data,error}=await supabase.rpc('game_roll_die',{p_room:roomId})
-      if(error)throw new Error(error.message)
-      await refresh(roomId)
-      setNotice('Dado: '+data+'. Seu caminho está iluminado na árvore.')
-      // Mantém o dado visível durante o giro antes de revelar os galhos alcançáveis.
-      await new Promise<void>(resolve=>window.setTimeout(resolve,1050))
-      setBoard('arvore')
-      setPanel(null)
-    }catch(e){
-      setNotice('Não foi possível lançar o dado: '+errorText(e))
-    }finally{
-      setPendingRoll(false)
-      setBusy(false)
-    }
-  }
   function act(fn:'game_start_room'|'game_roll_die'|'game_end_turn'){
     if(!supabase||!roomId)return
-    if(fn==='game_roll_die'){void rollDie();return}
-    const message=fn==='game_start_room'?'Partida iniciada. Boa exploração!':'Turno concluído.'
-    void execute(()=>supabase.rpc(fn,{p_room:roomId}),message)
+    const messages={
+      game_start_room:'Partida iniciada. Boa exploração!',
+      game_roll_die:'O dado foi lançado; siga os galhos destacados.',
+      game_end_turn:'Turno concluído.',
+    }
+    if(fn==='game_roll_die')setPendingRoll(true)
+    void execute(()=>supabase.rpc(fn,{p_room:roomId}),messages[fn]).finally(()=>setPendingRoll(false))
   }
   function move(nodeId:number){
     if(!supabase||!roomId||!targets.includes(nodeId)||busy)return
@@ -292,7 +266,7 @@ export default function OnlineRoom(){
     <header ref={headerRef} className="sticky top-0 z-[60] border-b border-[#98784e]/30 bg-[#13251b]/95 px-3 py-2 shadow-xl backdrop-blur-md sm:px-5">
       <div className="mx-auto flex min-w-0 max-w-[1680px] flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-[.2em] text-[#cbb388] sm:text-xs [@media(max-height:500px)]:hidden">Química • Libras • Estratégia</p>
+          <p className="text-[10px] uppercase tracking-[.2em] text-[#cbb388] sm:text-xs">Química • Libras • Estratégia</p>
           <h1 className="truncate font-serif text-lg font-bold tracking-wide text-[#efdaad] sm:text-2xl">Raízes da Matéria</h1>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -312,10 +286,7 @@ export default function OnlineRoom(){
     </header>
 
     <div className="mx-auto w-full max-w-[1680px] px-2 py-3 sm:px-4">
-      <p role="status" aria-live="polite" title={notice}
-        className={notice
-          ?'mb-2 rounded-xl border border-[#b19565]/30 bg-[#24362a] px-3 py-2 text-sm leading-relaxed text-[#e4d5b5] '+(room?'max-h-12 overflow-hidden [@media(max-height:500px)]:max-h-8 [@media(max-height:500px)]:truncate':'')
-          :'sr-only'}>
+      <p role="status" aria-live="polite" className="mb-3 rounded-xl border border-[#b19565]/30 bg-[#24362a] px-3 py-2 text-sm leading-relaxed text-[#e4d5b5]">
         {notice}
       </p>
       {authError&&<p role="alert" className="mb-3 rounded-xl border border-red-400/60 bg-red-950/40 p-3 text-sm text-[#ffd9c8]">
