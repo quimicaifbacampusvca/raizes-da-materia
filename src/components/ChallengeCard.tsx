@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import CardMasterSvg, {type MasterCard} from './CardMasterSvg'
 
 type Card = {
   id:string;category:'identificacao'|'cotidiano'|'desafio'|'acontecimento'
@@ -166,51 +167,68 @@ export default function ChallengeCard({
       </header>
 
       <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto overscroll-contain p-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,.85fr)] lg:gap-4 lg:p-5">
-        <article className="min-w-0 overflow-hidden rounded-2xl border-[3px] border-[#b7915b] bg-[#cfb487] p-3 text-[#211810] shadow-[inset_0_0_35px_#6d482a55] sm:p-5">
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border-2 border-[#e6d19f] text-2xl text-[#fff2ca]"
-                style={{background:theme?.color??'#6c5c46'}}>{theme?.mark||'✦'}</span>
-              <div><p className="text-xs font-bold uppercase tracking-wide">{theme?.label||'Carta digital'}</p>
-                <p className="text-xs">Casa {challenge?challenge.node_id+1:'—'} · Vez de {respondent}</p></div>
+        <article className="flex min-w-0 flex-col gap-3 rounded-xl border border-[#b7915b]/40 bg-[#1d281e] p-2 text-[#f0ddb7] sm:p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+            <div>
+              <p className="text-xs uppercase tracking-widest text-[#c6ad7f]">Carta-mestra unificada</p>
+              <p className="text-xs text-[#afbdac]">A mesma frente aparece impressa no papel.</p>
             </div>
-            {card?.symbol&&<span className="rounded-lg border-2 border-[#78542c] bg-[#f0d6a7] px-3 py-1 font-serif text-2xl font-bold">{card.symbol}</span>}
+            <button type="button"
+              onClick={()=>window.open(window.location.pathname+'?baralho=imprimir','_blank','noopener,noreferrer')}
+              className={button+' text-xs text-[#f3dbad]'}>
+              Imprimir baralho
+            </button>
           </div>
-
           {!loaded&&<p className="p-4">Carregando carta para todos os participantes…</p>}
           {loaded&&!challenge&&<p className="rounded-lg border border-[#997a55] p-3 text-sm">
-            Esta partida começou antes da ativação do baralho digital. A etapa atual permanece presencial; as próximas casas abrirão cartas para toda a sala.
+            Esta partida começou antes da ativação do baralho digital. As próximas casas abrirão a carta-mestra para toda a sala.
           </p>}
-          {error&&<p role="alert" className="mb-3 rounded-lg border border-[#a04f3b] bg-[#f1c7b5] p-2 text-sm">{error}</p>}
-
+          {error&&<p role="alert" className="rounded-lg border border-[#a04f3b] bg-[#753b2e] p-2 text-sm text-white">{error}</p>}
           {card&&challenge&&<>
-            <p className="mb-4 font-serif text-lg font-semibold leading-snug sm:text-2xl">{card.prompt}</p>
-            {card.mode==='choice'?<div className="space-y-2" role="radiogroup" aria-label="Alternativas da carta">
-              {card.options.map((option,i)=><label key={i}
-                className={'flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm font-semibold sm:text-base '+
-                  (choice===i?'border-[#795224] bg-[#f4dfb6]':'border-[#80613d]/50 bg-[#e2c79a]/65')+
-                  (!canRespond?' cursor-default opacity-85':'')}>
-                <input type="radio" name={'answer-'+challenge.id} value={i} checked={choice===i}
-                  onChange={()=>setChoice(i)} disabled={!canRespond}
-                  className="h-5 w-5 accent-[#654527]"/>
-                <span className="min-w-0 flex-1">{String.fromCharCode(65+i)}. {option}</span>
-              </label>)}
-            </div>:<div>
+            <div className="relative mx-auto aspect-[5/7] w-full max-w-[450px] overflow-hidden rounded-[18px]"
+              data-unified-card="true">
+              <CardMasterSvg card={card as MasterCard} side="front"
+                selectedOption={canRespond?choice:null}/>
+              {card.mode==='choice'&&canRespond&&
+                <fieldset className="pointer-events-none absolute inset-0 border-0 p-0"
+                  aria-label="Alternativas da carta">
+                  <legend className="sr-only">Alternativas da carta</legend>
+                  {card.options.slice(0,4).map((option,i)=>
+                    <label key={i} aria-label={String.fromCharCode(65+i)+'. '+option}
+                      className="pointer-events-auto absolute block rounded-lg focus-within:outline focus-within:outline-4 focus-within:outline-offset-1 focus-within:outline-[#ffe5ad]"
+                      style={{
+                        left:'10.3%',width:'79.5%',
+                        top:((783+i*52)/1050*100)+'%',
+                        height:(47/1050*100)+'%',
+                      }}>
+                      <input type="radio" name={'answer-'+challenge.id}
+                        aria-label={String.fromCharCode(65+i)+'. '+option}
+                        value={i} checked={choice===i}
+                        onChange={()=>setChoice(i)}
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"/>
+                    </label>
+                  )}
+                </fieldset>}
+            </div>
+            {card.mode==='text'&&<div className="rounded-xl border border-[#96774b]/50 bg-[#273127] p-3">
               <label htmlFor="card-answer" className="mb-2 block text-sm font-semibold">Sua resposta para avaliação</label>
               <textarea id="card-answer" className={textField+' min-h-[104px]'} value={answer}
                 onChange={e=>setAnswer(e.target.value)} maxLength={600}
                 placeholder="Explique sua resposta ao mestre…" disabled={!canRespond}/>
             </div>}
-            {canRespond&&<button className="mt-4 min-h-12 w-full rounded-xl bg-[#513a23] px-4 font-semibold text-[#f9e5bf] disabled:opacity-40"
-              disabled={busy||!submitReady} onClick={sendAnswer}>Enviar resposta ao mestre</button>}
-            {submission&&<div className="mt-4 rounded-xl border border-[#6f6e45] bg-[#e6d4a9] p-3 text-sm">
+            {canRespond&&<button className="min-h-12 w-full rounded-xl bg-[#cda66b] px-4 font-semibold text-[#281d10] disabled:opacity-40"
+              disabled={busy||!submitReady} onClick={sendAnswer}>
+              Enviar resposta ao mestre
+            </button>}
+            {submission&&<div className="rounded-xl border border-[#9d8a61] bg-[#2b382b] p-3 text-sm">
               <p className="font-semibold">Resposta enviada ao mestre</p>
               <p className="mt-1 whitespace-pre-wrap break-words">{chosenText}</p>
             </div>}
-            {!isCurrentPlayer&&!host&&<p className="mt-3 text-sm">A carta está visível para você. O jogador da vez responde; todos podem participar do diálogo.</p>}
-            {card.instructions&&<p className="mt-4 border-t border-[#8b714e] pt-3 text-sm italic">{card.instructions}</p>}
-            {status&&<p role="status" className={'mt-4 rounded-lg border-2 p-3 font-bold '+
-              (status==='correct'?'border-[#426e48] bg-[#b6d5a9]':'border-[#924f3a] bg-[#e6ad9b]')}>
+            {!isCurrentPlayer&&!host&&<p className="text-sm">
+              A mesma carta está visível para todos. O jogador da vez responde e todos podem dialogar.
+            </p>}
+            {status&&<p role="status" className={'rounded-lg border-2 p-3 font-bold '+
+              (status==='correct'?'border-[#70b18c] bg-[#23553d]':'border-[#b87764] bg-[#673c32]')}>
               {status==='correct'?'✓ Resposta validada como correta pelo mestre.':'× Resposta marcada como incorreta pelo mestre.'}
             </p>}
           </>}
