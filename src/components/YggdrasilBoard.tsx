@@ -1,11 +1,10 @@
-import { useEffect, useId, useRef, useState, type RefObject } from 'react'
-import { edges, houseColor, houseLabel, nodes, playerColors, type HouseType } from '../game/board'
-import { treeRoute } from '../game/treeGeometry'
+import { useId, useRef, useState, type RefObject } from 'react'
+import { houseColor, houseLabel, neighbors, nodes, playerColors, type HouseType } from '../game/board'
 
 /**
  * Yggdrasil original em vetores: árvore entalhada + mapa jogável.
- * Os caminhos são veios reais da árvore e cada bifurcação é um nó do jogo.
- * O SVG usa o mesmo grafo do motor e do banco de dados.
+ * A camada de arte é puramente decorativa. A camada de casas usa
+ * o mesmo grafo de 48 nós dos motores local e multiplayer.
  */
 export type TreePawn = { seat: number; nodeId: number }
 type Props = {
@@ -24,8 +23,10 @@ const typeSymbols: Record<HouseType, string> = {
 const typeNames: HouseType[] = ['identificacao', 'cotidiano', 'desafio', 'acontecimento']
 
 function position(nodeId: number) {
-  return { x: nodes[nodeId].x, y: nodes[nodeId].y }
+  const n = nodes[nodeId]
+  return { x: 450 + (n.x - 196) * 1.52, y: 980 - n.row * 58 }
 }
+
 function buildCanopy() {
   const byDepth = Array.from({ length: 7 }, () => '')
   const tips: { x: number; y: number; angle: number }[] = []
@@ -55,6 +56,32 @@ function buildCanopy() {
 }
 const canopy = buildCanopy()
 const widths = [19, 13, 8.3, 5.3, 3.3, 2.1, 1.2]
+const roots = [
+  'M453 838 C403 893 385 941 302 968 C218 989 173 1052 126 1125',
+  'M468 825 C516 884 539 935 615 967 C677 993 725 1063 775 1133',
+  'M428 852 C381 932 354 1007 283 1050 C254 1070 214 1123 189 1161',
+  'M477 853 C527 936 570 990 623 1045 C674 1095 669 1130 723 1171',
+  'M445 856 C453 937 429 1018 460 1061 C496 1108 522 1122 538 1160',
+  'M433 867 C393 926 330 975 349 1019 C367 1084 417 1125 397 1173',
+  'M471 851 C513 925 580 984 551 1034 C527 1085 471 1112 481 1182',
+  'M411 869 C352 908 277 943 222 934 C156 924 107 964 82 1025',
+  'M489 868 C557 921 647 919 700 953 C741 974 796 1014 824 1057',
+  'M456 861 C431 927 491 973 454 1017 C401 1071 369 1094 333 1171',
+]
+const trunk = [
+  'M452 865 C391 817 412 765 456 728 C510 680 457 622 421 571',
+  'M445 866 C494 806 489 760 451 720 C391 654 429 613 477 559',
+  'M443 859 C416 803 472 772 490 728 C518 670 459 622 451 579',
+  'M465 860 C491 790 412 765 431 711 C449 667 484 647 471 600',
+  'M459 873 C397 815 372 751 422 695 C456 651 445 626 415 602',
+  'M467 861 C523 813 536 751 477 697 C447 668 418 647 435 619',
+]
+const tracery = [
+  'M441 840 C401 802 416 759 451 731 C482 704 489 678 451 638',
+  'M458 842 C480 794 446 754 466 715 C498 676 434 652 431 620',
+  'M478 847 C515 802 494 751 468 724 C446 690 422 670 455 631',
+  'M419 841 C396 789 437 747 436 712 C421 679 457 654 469 617',
+]
 const outerLeaves = Array.from({ length: 32 }, (_, i) => {
   const t = -Math.PI + i * Math.PI / 31
   const x = 450 + Math.cos(t) * 394
@@ -77,7 +104,7 @@ function NodeGlyph({ type }: { type: HouseType }) {
 
 function TreeDrawing({ prefix, pawns, focusedNodeId, reachableIds, onMove, busy, svgRef }: Required<Pick<Props, 'pawns' | 'reachableIds' | 'busy'>> & Pick<Props, 'focusedNodeId' | 'onMove'> & { prefix: string; svgRef: RefObject<SVGSVGElement | null> }) {
   return <svg ref={svgRef} viewBox="0 0 900 1210" role="group" aria-label="Yggdrasil, árvore da descoberta com 48 casas navegáveis"
-    preserveAspectRatio="xMidYMid meet" className="block h-full w-full select-none" xmlns="http://www.w3.org/2000/svg">
+    className="block h-auto w-full select-none" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <radialGradient id={prefix + '-vellum'} cx="48%" cy="41%" r="64%">
         <stop offset="0%" stopColor="#dec49a" /><stop offset="50%" stopColor="#b89769" />
@@ -128,41 +155,27 @@ function TreeDrawing({ prefix, pawns, focusedNodeId, reachableIds, onMove, busy,
         {depth < 4 && <path d={d} stroke="#b39762" strokeWidth={widths[depth] * .27} opacity=".75" />}
       </g>)}
       {canopy.tips.map((t,i)=><ellipse key={i} cx={t.x} cy={t.y} rx="1.5" ry="4" transform={'rotate('+(t.angle*180/Math.PI)+' '+t.x+' '+t.y+')'} fill="#665034" opacity=".8"/>)}
+      {/* Tronco torcido, com fios de corte e textura */}
+      {trunk.map((d,i)=><g key={i} fill="none" strokeLinecap="round">
+        <path d={d} stroke="#17120d" strokeWidth={42-i%3*4} />
+        <path d={d} stroke={'url(#' + prefix + '-wood)'} strokeWidth={34-i%3*4} />
+        <path d={d} stroke="#d3ad71" strokeWidth={2.3+i%2} opacity=".7" />
+      </g>)}
+      {tracery.map((d,i)=><path key={i} d={d} stroke="#1a1710" strokeWidth="5.5" fill="none" opacity=".67" />)}
+      <path d="M420 842 Q450 878 480 841" fill="none" stroke="#d9b985" strokeWidth="5" opacity=".76" />
     </g>
 
-    {/* Veios de madeira: as arestas da árvore SÃO as rotas do jogo. */}
-    <g fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {edges.map(([a,b]) => {
-        const route=treeRoute(a,b)
-        const d=route.path
-        const width=route.width
-        const selected=focusedNodeId===a&&reachableIds.includes(b)||focusedNodeId===b&&reachableIds.includes(a)
-        return <g key={a+'-'+b} data-branch-kind={route.middle?'intermediario':'principal'}>
-          <path d={d} stroke="#090a08" strokeWidth={width+10}/>
-          <path d={d} stroke={'url(#'+prefix+'-wood)'} strokeWidth={width}/>
-          <path d={d} stroke="#e1bd80" strokeWidth={Math.max(1.3,width*.12)} opacity=".65"/>
-          <path d={d} stroke="#231a11" strokeWidth={Math.max(1,width*.052)} opacity=".8"
-            strokeDasharray={width>28?'18 28':'9 16'}/>
-          {/* Pequeno nó natural na madeira, sem criar uma nova casa jogável. */}
-          {route.middle&&<g transform={'translate('+route.midway.x+' '+route.midway.y+')'}
-            stroke="#bc9c67" fill="none" opacity=".83">
-            <ellipse rx="5.2" ry="3.4" strokeWidth="1.2" transform="rotate(-24)"/>
-            <ellipse rx="2" ry="1.3" strokeWidth=".9" transform="rotate(-24)"/>
-          </g>}
-          {selected&&<path d={d} stroke="#fff1ae" strokeWidth={width+12} opacity=".20"
-            className="motion-safe:animate-pulse"/>}
-        </g>
-      })}
-    </g>
-    {/* Bifurcações esculpidas entre os caminhos intermediários. */}
-    {[27,33].map(id=>{
-      const n=position(id)
-      return <g key={id} transform={'translate('+n.x+' '+n.y+')'}
-        fill="none" stroke="#b48a4d" aria-hidden="true" opacity=".48">
-        <circle r="36" strokeWidth="2" strokeDasharray="4 11"/>
-        <path d="M-32 13 Q0 -8 32 13 M-27 21 Q0 0 27 21"
-          strokeWidth="1.7" strokeLinecap="round"/>
-      </g>
+    {/* Raízes transbordam do medalhão, como na referência */}
+    {roots.map((d,i)=><g key={i} fill="none" strokeLinecap="round">
+      <path d={d} stroke="#0b0c0a" strokeWidth={18-i%3*2} />
+      <path d={d} stroke={'url(#' + prefix + '-wood)'} strokeWidth={12-i%3*2} />
+      <path d={d} stroke="#dfbb7d" strokeWidth="1.5" opacity=".72" />
+    </g>)}
+    {Array.from({length:20},(_,i)=>{
+      const x=85+i*38
+      const y=1046+Math.sin(i*1.83)*39
+      return <path key={i} d={'M'+(450+(i-10)*12)+' 964 Q'+x+' '+(y-45)+' '+x+' '+y+' Q'+(x+Math.cos(i)*22)+' '+(y+35)+' '+(x+Math.sin(i)*34)+' '+(y+75)}
+        fill="none" stroke="#967a4f" strokeWidth={i%4===0?2:1} opacity=".6"/>
     })}
     {/* Nó da matéria: quatro laços metálicos entrelaçados */}
     <g fill="none" stroke={'url(#' + prefix + '-gold)'} strokeWidth="4" opacity=".88">
@@ -207,12 +220,27 @@ function TreeDrawing({ prefix, pawns, focusedNodeId, reachableIds, onMove, busy,
       <text x="0" y="8" fontFamily="Georgia,serif" fontSize="26" letterSpacing="4" fill="#f0d5a2" textAnchor="middle">RAÍZES DA MATÉRIA</text>
     </g>
 
+    {/* Grafo de movimento: conectado aos mesmos nós do motor do jogo */}
+    <g aria-hidden="true" fill="none" strokeLinecap="round" strokeLinejoin="round">
+      {nodes.flatMap(n => neighbors(n.id).filter(next => next > n.id).map(next => {
+        const from=position(n.id), to=position(next)
+        const midX=(from.x+to.x)/2
+        const midY=(from.y+to.y)/2 - (n.row===nodes[next].row?11:0)
+        const d='M'+from.x+' '+from.y+' Q'+midX+' '+midY+' '+to.x+' '+to.y
+        return <g key={n.id+'-'+next}>
+          <path d={d} stroke="#100e0a" strokeWidth="10" opacity=".86"/>
+          <path d={d} stroke="#f8d28c" strokeWidth="2.3" opacity=".93"/>
+          <path d={d} stroke="#77572c" strokeWidth=".8" strokeDasharray="3 9"/>
+        </g>
+      }))}
+    </g>
+
     {nodes.map(n=>{
       const p=position(n.id)
       const selectable=reachableIds.includes(n.id) && !busy && !!onMove
       const focused=focusedNodeId===n.id
       const occupants=pawns.filter(pawn=>pawn.nodeId===n.id)
-      return <g key={n.id} data-node-id={n.id}
+      return <g key={n.id}
         role="button" tabIndex={selectable?0:-1}
         aria-label={'Casa '+(n.id+1)+': '+houseLabel[n.type]+(selectable?', movimento disponível':'')}
         aria-disabled={!selectable}
@@ -223,7 +251,7 @@ function TreeDrawing({ prefix, pawns, focusedNodeId, reachableIds, onMove, busy,
             onMove?.(n.id)
           }
         }}
-        className={selectable?'cursor-pointer focus:outline-none':'pointer-events-none cursor-default'}
+        className={selectable?'cursor-pointer focus:outline-none':'cursor-default'}
         transform={'translate('+p.x+' '+p.y+')'}>
         <title>{'Casa '+(n.id+1)+' — '+houseLabel[n.type]}</title>
         {/* Área de toque maior que o marcador visível */}
@@ -250,51 +278,8 @@ function TreeDrawing({ prefix, pawns, focusedNodeId, reachableIds, onMove, busy,
 
 export default function YggdrasilBoard({ pawns, focusedNodeId=null, reachableIds=[], onMove, busy=false, className='' }: Props) {
   const [expanded,setExpanded] = useState(false)
-  const [stageHeight,setStageHeight] = useState(500)
   const svgRef = useRef<SVGSVGElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
   const prefix=useId().replace(/:/g,'')
-
-  // A altura é a região realmente disponível entre o painel superior e
-  // a doca fixa, evitando cortes da copa/raízes em celular e desktop.
-  useEffect(() => {
-    const viewport=scrollRef.current
-    if(!viewport)return
-    const calculate=()=>{
-      const screenHeight=window.visualViewport?.height ?? window.innerHeight
-      const top=viewport.getBoundingClientRect().top
-      const space=screenHeight-top-100
-      setStageHeight(Math.max(150,Math.min(920,Math.floor(space))))
-    }
-    calculate()
-    const observer=new ResizeObserver(calculate)
-    if(viewport.parentElement)observer.observe(viewport.parentElement)
-    window.addEventListener('resize',calculate)
-    window.visualViewport?.addEventListener('resize',calculate)
-    return ()=>{
-      observer.disconnect()
-      window.removeEventListener('resize',calculate)
-      window.visualViewport?.removeEventListener('resize',calculate)
-    }
-  },[])
-
-  useEffect(() => {
-    const viewport=scrollRef.current
-    if(!viewport)return
-    if(!expanded){
-      viewport.scrollTo({left:0,top:0,behavior:'instant'})
-      return
-    }
-    if(focusedNodeId==null)return
-    const node=position(focusedNodeId)
-    const svgWidth=svgRef.current?.getBoundingClientRect().width??900
-    const ratio=svgWidth/900
-    viewport.scrollTo({
-      left:Math.max(0,node.x*ratio-viewport.clientWidth/2),
-      top:Math.max(0,node.y*ratio-viewport.clientHeight/2),
-      behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',
-    })
-  },[focusedNodeId,expanded])
 
   function exportSvg() {
     if (!svgRef.current) return
@@ -321,13 +306,13 @@ export default function YggdrasilBoard({ pawns, focusedNodeId=null, reachableIds
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#8a6a43]/35 px-3 py-3 sm:px-5">
       <div>
         <p className="font-serif text-base tracking-[.14em] text-[#e7ca91] sm:text-lg">A Árvore dos Elementos</p>
-        <p className="text-xs text-[#bcac8e]">{expanded?'Exploração ampliada · arraste para navegar':'Mapa inteiro · 48 casas visíveis'}</p>
+        <p className="text-xs text-[#bcac8e]">Gravura vetorial interativa · 48 casas</p>
       </div>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={()=>setExpanded(old=>!old)}
           aria-pressed={expanded}
           className="min-h-11 rounded-lg border border-[#c59d5c]/60 px-3 text-sm font-semibold text-[#f2d49d] hover:bg-[#3d3020] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fae4b4]">
-          {expanded?'Ver mapa inteiro':'Ampliar para jogar'}
+          {expanded?'Ajustar mapa':'Ampliar mapa'}
         </button>
         <button type="button" onClick={exportSvg}
           className="min-h-11 rounded-lg border border-[#c59d5c]/60 px-3 text-sm font-semibold text-[#f2d49d] hover:bg-[#3d3020] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fae4b4]">
@@ -335,17 +320,8 @@ export default function YggdrasilBoard({ pawns, focusedNodeId=null, reachableIds
         </button>
       </div>
     </div>
-    <div ref={scrollRef}
-      className={expanded
-        ?'w-full overflow-auto overscroll-contain'
-        :'w-full overflow-hidden'}
-      style={{height:stageHeight}}
-      role="region" tabIndex={0}
-      aria-label="Área navegável da árvore com rolagem vertical e horizontal"
-      data-map-mode={expanded?'zoom':'fit'}>
-      <div className={expanded
-        ?'mx-auto aspect-[900/1210] min-w-[900px] w-full max-w-[1100px]'
-        :'h-full w-full'}>
+    <div className="overflow-x-auto overscroll-x-contain">
+      <div className={'mx-auto '+(expanded?'min-w-[840px] max-w-[960px]':'min-w-[600px] max-w-[850px] sm:min-w-0')}>
         <TreeDrawing prefix={prefix} svgRef={svgRef} pawns={pawns} focusedNodeId={focusedNodeId}
           reachableIds={reachableIds} onMove={onMove} busy={busy}/>
       </div>
@@ -357,6 +333,6 @@ export default function YggdrasilBoard({ pawns, focusedNodeId=null, reachableIds
         <span>{houseLabel[type]}</span>
       </div>)}
     </div>
-    <p className="px-3 pb-3 text-xs text-[#b9a98a] sm:px-5">A árvore aparece inteira por padrão. Para tocar nas casas com mais precisão, use “Ampliar para jogar”; nesse modo, o mapa acompanha o peão e permite rolagem. Os nós entalhados não consomem passos.</p>
+    <p className="px-3 pb-3 text-xs text-[#b9a98a] sm:px-5">Linhas douradas indicam conexões. Casas com halo luminoso podem ser escolhidas neste turno. No celular, deslize lateralmente para explorar o tabuleiro.</p>
   </div>
 }

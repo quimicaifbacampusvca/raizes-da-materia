@@ -1,45 +1,38 @@
 # Raízes da Matéria
 
-**Jogo educativo web multiplayer de Química e Libras**, para uso principalmente em celulares na sala de aula. Um mestre organiza a expedição e até quatro estudantes participam por código/link. A versão impressa será complementar.
+Jogo educativo original de Química e Libras. A versão principal será um jogo **web mobile multiplayer**, com mestre e até quatro jogadores em uma sala compartilhada; a versão física será complementar.
 
-## Experiência
-- **Árvore da Descoberta:** Yggdrasil ornamental em SVG; as 48 casas estão localizadas em raízes, tronco e galhos. As 62 conexões de madeira são os caminhos, sem grade independente.
-- **Atlas Periódico:** domínio de 50 elementos jogáveis das famílias A, em sua posição na Tabela Periódica. O painel ainda está em refinamento gráfico.
-- **Doca responsiva:** Árvore, Tabela, Jogadores e Ações. Os dois últimos abrem painéis flutuantes sem abandonar o mapa.
-- **Dado 3D:** animação autoral com CSS e bronze; o **resultado é sorteado e validado pelo servidor**, não pelo navegador.
-- **Saída da sala:** jogadores podem liberar suas vagas sem perder o histórico; encerrar a sala é uma ação confirmada pelo mestre.
-- **Libras:** o mestre apresenta e valida desafios presencialmente. Sinais-termo e os baralhos completos continuam pendentes de validação pedagógica.
+## Tabuleiros
+- **Árvore da Descoberta**: mapa SVG de 48 casas com navegação vertical/horizontal, bifurcações e quatro tipos de encontros.
+- **Tabela Periódica**: estrutura científica de 118 posições com 50 elementos jogáveis das famílias A. O domínio é indicado por quatro cores e símbolos.
 
-O modo de jogo local foi removido da interface por enquanto. A prioridade é a experiência **multiplayer real**.
+## Tecnologia
+React + TypeScript + Tailwind CSS + SVG, Vite, GitHub Pages e backend futuro no Supabase. Arquitetura de salas descrita em [docs/arquitetura-multijogador.md](docs/arquitetura-multijogador.md).
 
-## Arquitetura
-- React, TypeScript, Vite, Tailwind CSS e SVG.
-- Hospedagem em GitHub Pages: https://quimicaifbacampusvca.github.io/raizes-da-materia/
-- Supabase: autenticação anônima, PostgreSQL com RLS, funções SQL autoritativas e atualizações Realtime.
-- Estrutura inicial: [database/initial_multiplayer.sql](database/initial_multiplayer.sql).
-- Rotas de madeira e saída da sala: [database/board_routes_and_room_exit.sql](database/board_routes_and_room_exit.sql).
-- Detalhes de segurança e arquitetura: [docs/arquitetura-multijogador.md](docs/arquitetura-multijogador.md).
-
-## Desenvolvimento
+## Desenvolvimento local
 ```bash
 npm install
 npm run dev
 npm run build
-npm run test:e2e
 ```
 
-O build para GitHub Pages utiliza as variáveis públicas `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`. Nunca publicar a chave secreta/service role no front-end.
+## Publicação
+O workflow `.github/workflows/pages.yml` prepara o site para GitHub Pages quando a branch for integrada na `main` e em **Settings → Pages → Build and deployment → Source** for escolhido **GitHub Actions**.
 
-## Responsividade
-A workflow [responsive.yml](.github/workflows/responsive.yml) executa o Playwright em **Chromium, Firefox e WebKit** com estes formatos: 320×640, 360×740, 390×844, 428×926, 667×375, 768×1024, 1024×768, 1440×900 e 1920×1080.
+A URL prevista, após ativar a publicação, é `https://quimicaifbacampusvca.github.io/raizes-da-materia/`. Não presumir que esteja publicada antes de verificar o workflow e o Pages.
 
-O teste usa um backend **mockado**, verifica ausência de rolagem horizontal global e navega pela doca, painéis e confirmação de saída. Um CI aprovado **não substitui** o teste real entre diferentes celulares conectados ao Supabase.
+## Estado da versão 0.2 (em desenvolvimento)
+- **Demonstração local:** movimentação simulada em um aparelho, com o mapa SVG e a Tabela Periódica.
+- **Interface de salas online:** formulários de mestre e jogadores, convite por código/link, tabuleiro compartilhável, ações de turno e validação pelo mestre.
+- **Backend preparado:** esquema SQL em [database/initial_multiplayer.sql](database/initial_multiplayer.sql) com RLS e funções de ação autorizadas.
+- **Ainda não é multiplayer operacional:** falta criar e autorizar o projeto Supabase, habilitar Auth anônimo, aplicar/testar o SQL e configurar as variáveis públicas do build.
+- Nenhum gabarito reservado nem sinal-termo definitivo foi disponibilizado; Libras e conteúdo científico exigem validação especializada.
 
-## Estado de implementação
-- A infraestrutura Supabase está provisionada, a autenticação anônima foi habilitada e as rotas/ações de saída foram migradas para o banco.
-- A experiência visual e a navegação estão em homologação no PR #4.
-- Persistência e sincronização dependem de conexão de rede.
-- As mecânicas de eventos, baralhos, disputas e narrativa final ainda precisam de aprofundamento e testes.
-- A versão atual ainda **não é um jogo completo homologado**.
+## Como habilitar a sala online
+1. Criar projeto Supabase autorizado e habilitar **Auth → Anonymous Sign-Ins**.
+2. Aplicar e verificar `database/initial_multiplayer.sql` no projeto, incluindo autorização RLS e Realtime.
+3. Definir `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` no ambiente de build. A publishable key é pública; **nunca** incluir service role/secret key na aplicação.
+4. Executar build e verificar sala com mestre e quatro jogadores em aparelhos diferentes.
+5. Só declarar homologação após validar concorrência, reconexões, privacidade e compatibilidade móvel.
 
-As imagens e a programação do tabuleiro são autorais. A técnica de dado CSS 3D foi escolhida após avaliar projetos abertos, sem incorporar bibliotecas ou código de terceiros.
+Consulte [docs/arquitetura-multijogador.md](docs/arquitetura-multijogador.md) para os critérios de aceitação.
