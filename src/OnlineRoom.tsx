@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import YggdrasilBoard from './components/YggdrasilBoard'
 import RuneDie from './components/RuneDie'
-import { houseLabel, neighbors, nodes, playableElements, playerColors, playerMarks } from './game/board'
+import ChallengeCard from './components/ChallengeCard'
+import { neighbors, playableElements, playerColors, playerMarks } from './game/board'
 import { getSupabaseClient, isSupabaseConfigured } from './lib/supabase'
 
 type Phase='lobby'|'ready'|'moving'|'challenge'|'finished'
 type Room={
   id:string;code:string;name:string;host_id:string;phase:Phase;
   current_seat:number|null;die_roll:number|null;remaining_steps:number;
-  award_used:boolean;revision:number
+  award_used:boolean;revision:number;turn_index:number
 }
 type Player={user_id:string;seat:number;nickname:string;node_id:number;active:boolean}
 type Claim={symbol:string;owner_id:string}
@@ -82,7 +83,7 @@ export default function OnlineRoom(){
   const [room,setRoom]=useState<Room|null>(null)
   const [players,setPlayers]=useState<Player[]>([])
   const [claims,setClaims]=useState<Claim[]>([])
-  const [symbol,setSymbol]=useState('H')
+  const [cardHidden,setCardHidden]=useState(false)
   const [board,setBoard]=useState<Board>('arvore')
   const [panel,setPanel]=useState<Panel>(null)
   const [exitConfirm,setExitConfirm]=useState(false)
@@ -115,7 +116,7 @@ export default function OnlineRoom(){
   const refresh=useCallback(async(id:string)=>{
     if(!supabase)return
     const [r,p,c]=await Promise.all([
-      supabase.from('game_rooms').select('id,code,name,host_id,phase,current_seat,die_roll,remaining_steps,award_used,revision').eq('id',id).single(),
+      supabase.from('game_rooms').select('id,code,name,host_id,phase,current_seat,die_roll,remaining_steps,award_used,revision,turn_index').eq('id',id).single(),
       supabase.from('game_players').select('user_id,seat,nickname,node_id,active').eq('room_id',id).order('seat'),
       supabase.from('game_claims').select('symbol,owner_id').eq('room_id',id),
     ])
@@ -171,9 +172,6 @@ export default function OnlineRoom(){
   const current=activePlayers.find(p=>p.seat===room?.current_seat)
   const myTurn=!!room&&room.current_seat===self?.seat
   const targets=myTurn&&room?.phase==='moving'&&self?neighbors(self.node_id):[]
-  const canAward=host&&room?.phase==='challenge'&&!room.award_used&&!!current&&
-    ((current.node_id*17)%48)<20
-  const remainingElements=playableElements.filter(e=>!claims.some(c=>c.symbol===e.symbol))
   const activeSeat=room?.current_seat??null
 
   // Todos voltam ao mapa quando o dado é lançado. Quem clicou
@@ -253,12 +251,6 @@ export default function OnlineRoom(){
     if(!supabase||!roomId||!targets.includes(nodeId)||busy)return
     void execute(()=>supabase.rpc('game_move_pawn',{p_room:roomId,p_node:nodeId}),'Movimento registrado na árvore.')
   }
-  function award(){
-    if(!supabase||!roomId||!canAward)return
-    const chosen=remainingElements.some(e=>e.symbol===symbol)?symbol:remainingElements[0]?.symbol
-    if(!chosen)return
-    void execute(()=>supabase.rpc('game_award_element',{p_room:roomId,p_symbol:chosen}),'Elemento conquistado e registrado no Atlas.')
-  }
   async function exitRoom(){
     if(!supabase||!roomId||busy)return
     setBusy(true)
@@ -283,9 +275,11 @@ export default function OnlineRoom(){
     }else setNotice('Copie: '+url)
   }
   function clickDock(target:'arvore'|'tabela'|'pessoas'|'acoes'){
+    if(target==='acoes'&&room?.phase==='challenge'){setCardHidden(false);setPanel(null);return}
     if(target==='arvore'||target==='tabela'){setBoard(target);setPanel(null)}
     else setPanel(p=>p===target?null:target)
   }
+  useEffect(()=>{setCardHidden(false)},[room?.phase,room?.turn_index])
   const panelTitle=panel==='pessoas'?'Participantes e conquistas':'Ações da partida'
 
   return <main className="min-h-dvh min-w-0 bg-[#0b1712] pb-[calc(6.6rem+env(safe-area-inset-bottom))] text-[#eee0c2]">
@@ -361,7 +355,10 @@ export default function OnlineRoom(){
           <div className="flex flex-wrap items-center gap-2">
             {current&&<span className="text-xs">Vez: <strong className="text-[#f8dda5]">{current.nickname}</strong></span>}
             {room.phase==='lobby'&&host&&<button className={skin.gold+' text-xs'} disabled={busy||activePlayers.length===0} onClick={()=>act('game_start_room')}>Iniciar</button>}
-            <button className={skin.secondary+' text-xs'} onClick={()=>setPanel('acoes')}>Abrir ações</button>
+            <button className={skin.secondary+' text-xs'} onClick={()=>{
+              if(room.phase==='challenge'){setPanel(null);setCardHidden(false)}
+              else setPanel('acoes')
+            }}>{room.phase==='challenge'?'Abrir carta':'Abrir ações'}</button>
           </div>
         </div>
         <div className="relative min-w-0">
@@ -385,7 +382,7 @@ export default function OnlineRoom(){
           {key:'arvore',name:'Árvore',symbol:'♣'},
           {key:'tabela',name:'Tabela',symbol:'▦'},
           {key:'pessoas',name:'Jogadores',symbol:'◉'},
-          {key:'acoes',name:'Ações',symbol:'⚄'},
+          {key:'acoes',name:room.phase==='challenge'?'Carta':'Ações',symbol:room.phase==='challenge'?'▤':'⚄'},
         ] as const).map(tab=>{
           const selected=tab.key==='arvore'||tab.key==='tabela'?board===tab.key&&panel===null:panel===tab.key
           return <button key={tab.key} type="button" onClick={()=>clickDock(tab.key)}
@@ -440,31 +437,28 @@ export default function OnlineRoom(){
             {myTurn?'Toque em um galho destacado da árvore para avançar.':'Aguarde o participante percorrer o trajeto.'}
           </p>}
           {room.phase==='challenge'&&<div className="mt-3 rounded-xl border border-[#93784c]/50 bg-[#263021] p-3">
-            <h3 className="font-semibold">Desafio em andamento</h3>
-            <p className="mt-2 text-sm text-[#cdd6c2]">
-              {current?'Casa '+(current.node_id+1)+' — '+houseLabel[nodes[current.node_id].type]:'Aguardando mestre'}
+            <h3 className="font-semibold">Carta digital compartilhada</h3>
+            <p className="mt-2 text-xs text-[#d2d8c6]">
+              O jogador responde e todos dialogam. O mestre acompanha o gabarito reservado e valida a resposta.
             </p>
-            <p className="mt-2 text-xs text-[#b6c8b8]">A resposta em Libras é apresentada e validada pelo mestre presencialmente.</p>
+            <button type="button" onClick={()=>{setPanel(null);setCardHidden(false)}}
+              className={skin.gold+' mt-3 w-full'}>Abrir carta e chat</button>
+            {(host||myTurn)&&<button type="button" onClick={()=>act('game_end_turn')}
+              disabled={busy} className={skin.secondary+' mt-3 w-full'}>
+              Encerrar turno após validação
+            </button>}
           </div>}
-          {host&&room.phase==='challenge'&&<>
-            <div className="mt-4 rounded-xl border border-[#c69e65]/45 p-3">
-              <h3 className="font-semibold text-[#f1d7a1]">Validação do mestre</h3>
-              <p className="mb-3 text-xs">Disponível apenas na casa de identificação. O resultado é validado no servidor.</p>
-              <label htmlFor="award-select" className="mb-1 block text-xs">Elemento correto</label>
-              <select id="award-select" className={skin.field}
-                value={remainingElements.some(e=>e.symbol===symbol)?symbol:(remainingElements[0]?.symbol??'')}
-                onChange={e=>setSymbol(e.target.value)} disabled={!canAward||busy}>
-                {remainingElements.map(e=><option key={e.symbol} value={e.symbol}>{e.symbol} — {e.name}</option>)}
-              </select>
-              <button type="button" className={skin.gold+' mt-3 w-full'}
-                disabled={!canAward||busy||remainingElements.length===0} onClick={award}>Validar conquista</button>
-            </div>
-          </>}
-          {room.phase==='challenge'&&(host||myTurn)&&<button type="button" onClick={()=>act('game_end_turn')}
-            disabled={busy} className={skin.secondary+' mt-3 w-full'}>Encerrar turno</button>}
         </>}
       </>}
     </div>}
+
+    {room&&room.phase==='challenge'&&supabase&&!cardHidden&&<ChallengeCard
+      client={supabase} roomId={room.id} turnIndex={room.turn_index}
+      userId={userId} host={host} isCurrentPlayer={myTurn}
+      participants={activePlayers} playerName={current?.nickname||'Jogador'}
+      onClose={()=>setCardHidden(true)} onValidated={()=>void refresh(room.id)}
+      onEndTurn={()=>act('game_end_turn')}/>
+    }
 
     {exitConfirm&&room&&<div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm"
       role="presentation" onClick={e=>{if(e.target===e.currentTarget)setExitConfirm(false)}}>
