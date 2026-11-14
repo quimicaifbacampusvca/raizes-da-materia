@@ -1,0 +1,50 @@
+name: Publicar Raízes da Matéria
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependências
+        run: npm install --no-audit --no-fund
+      - name: Compilar
+        env:
+          VITE_SUPABASE_URL: https://imnvwsdmflkcpzukhols.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_unLurHg5PfVO_nrNWAaNfQ_7muF6Qcx
+        run: npm run build
+      - name: Verificar que o site contém JS compilado
+        shell: bash
+        run: |
+          test -s dist/index.html
+          if grep -q '/src/main.tsx' dist/index.html; then
+            echo "::error::index.html ainda aponta para código-fonte TypeScript"
+            exit 1
+          fi
+          grep -Eq '/raizes-da-materia/assets/[^"]+\.js' dist/index.html
+          test -n "$(find dist/assets -type f -name '*.js' -print -quit)"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
