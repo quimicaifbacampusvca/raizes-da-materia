@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import PhysicalCard from './PhysicalCard'
 
 type Card = {
   id:string;category:'identificacao'|'cotidiano'|'desafio'|'acontecimento'
@@ -151,15 +152,15 @@ export default function ChallengeCard({
   const chosenText=submission?.mode==='choice'&&submission.option_index!==null
     ?card?.options[submission.option_index]:submission?.answer_text
 
-  return <div className="fixed inset-0 z-[65] flex items-center justify-center bg-[#030704]/85 px-2 py-2 backdrop-blur-sm sm:px-5 sm:py-4"
+  return <div className="physical-card-overlay fixed inset-0 z-[65] flex items-center justify-center bg-[#030704]/85 px-2 py-2 backdrop-blur-sm sm:px-5 sm:py-4"
     role="presentation">
     <section role="dialog" aria-modal="true" aria-label="Carta de investigação compartilhada"
       className="flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border-2 border-[#af8850] bg-[#1b2117] shadow-[0_15px_80px_#000] sm:max-h-[calc(100dvh-2rem)]">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[#927447]/50 bg-[#29281d] px-3 py-2 sm:px-5">
         <div className="min-w-0">
-          <p className="text-[11px] uppercase tracking-[.13em] text-[#c8af7e]">Raízes da Matéria · Carta compartilhada</p>
+          <p className="text-[11px] uppercase tracking-[.13em] text-[#c8af7e]">Raízes da Matéria · Baralho original interativo</p>
           <h2 className="truncate font-serif text-lg font-semibold text-[#f4d9a9] sm:text-2xl">
-            {card?.title||'Preparando carta…'}
+            {card?.category==='identificacao'?'Investigação em Libras':card?.title||'Preparando carta…'}
           </h2>
         </div>
         <button type="button" onClick={onClose} className={button+' shrink-0 bg-[#342d21] text-xs text-[#f1ddbc]'}>Ver tabuleiro</button>
@@ -174,7 +175,7 @@ export default function ChallengeCard({
               <div><p className="text-xs font-bold uppercase tracking-wide">{theme?.label||'Carta digital'}</p>
                 <p className="text-xs">Casa {challenge?challenge.node_id+1:'—'} · Vez de {respondent}</p></div>
             </div>
-            {card?.symbol&&<span className="rounded-lg border-2 border-[#78542c] bg-[#f0d6a7] px-3 py-1 font-serif text-2xl font-bold">{card.symbol}</span>}
+            {card?.symbol&&(card.category!=='identificacao'||status==='correct')&&<span className="rounded-lg border-2 border-[#78542c] bg-[#f0d6a7] px-3 py-1 font-serif text-2xl font-bold">{card.symbol}</span>}
           </div>
 
           {!loaded&&<p className="p-4">Carregando carta para todos os participantes…</p>}
@@ -184,7 +185,10 @@ export default function ChallengeCard({
           {error&&<p role="alert" className="mb-3 rounded-lg border border-[#a04f3b] bg-[#f1c7b5] p-2 text-sm">{error}</p>}
 
           {card&&challenge&&<>
-            <p className="mb-4 font-serif text-lg font-semibold leading-snug sm:text-2xl">{card.prompt}</p>
+            {card.category==='identificacao'&&card.symbol&&<div className="mb-5 flex justify-center rounded-xl border border-[#8b653b]/40 bg-[#f6e6c6] p-2 sm:p-4">
+              <PhysicalCard key={challenge.id} symbol={card.symbol} won={status==='correct'}/>
+            </div>}
+            <p className="mb-4 font-serif text-lg font-semibold leading-snug sm:text-2xl">{card.category==='identificacao'?'Observe a datilologia e as três dicas na carta B. Qual é o elemento químico representado?':card.prompt}</p>
             {card.mode==='choice'?<div className="space-y-2" role="radiogroup" aria-label="Alternativas da carta">
               {card.options.map((option,i)=><label key={i}
                 className={'flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm font-semibold sm:text-base '+
