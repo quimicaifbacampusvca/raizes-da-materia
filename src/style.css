@@ -42,3 +42,47 @@ button:disabled { cursor: not-allowed; }
   .runic-die-cube { transition: none !important; }
   .runic-die-pending { animation: none !important; }
 }
+
+/* A animação acontece sobre a própria imagem da carta física, não em uma cópia. */
+@keyframes physical-card-arrive {
+  0% { opacity:0; transform:translate3d(10vw,-30vh,0) rotate(-15deg) scale(.52); filter:brightness(.65); }
+  55% { opacity:1; transform:translate3d(-1vw,2vh,0) rotate(3deg) scale(1.04); filter:brightness(1.06); }
+  76% { transform:translate3d(0,-.6vh,0) rotate(-1deg) scale(.99); }
+  100% { transform:translate3d(0,0,0) rotate(0) scale(1); filter:brightness(1); }
+}
+@keyframes physical-overlay-appear {
+  from { opacity:0; }
+  to { opacity:1; }
+}
+.physical-card-overlay { animation:physical-overlay-appear 240ms ease-out both; }
+.physical-card-deal {
+  animation:physical-card-arrive 840ms cubic-bezier(.19,.88,.3,1) both;
+  perspective:1400px;
+  filter:drop-shadow(0 12px 17px rgba(24,14,2,.35));
+  touch-action:manipulation;
+}
+.physical-card-rotator {
+  display:block;
+  width:100%;
+  aspect-ratio:827/1417;
+  position:relative;
+  transform-style:preserve-3d;
+  transition:transform 850ms cubic-bezier(.2,.75,.2,1);
+}
+.physical-card-rotator--reversed { transform:rotateY(180deg); }
+.physical-card-face {
+  position:absolute;
+  inset:0;
+  display:block;
+  border-radius:12px;
+  overflow:hidden;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+  box-shadow:0 12px 28px rgba(22,10,3,.28);
+}
+.physical-card-face--back { transform:rotateY(180deg); }
+.physical-card-face img { display:block; width:100%; height:100%; object-fit:contain; }
+@media (prefers-reduced-motion: reduce) {
+  .physical-card-overlay, .physical-card-deal { animation:none !important; }
+  .physical-card-rotator { transition:none !important; }
+}
